@@ -35,6 +35,7 @@ export function clearAuthToken() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem("auth_token");
   window.localStorage.removeItem("auth_user");
+  window.sessionStorage.clear();
 }
 
 async function apiFetch<T>(
@@ -81,6 +82,21 @@ export async function login(email: string, password: string): Promise<LoginRespo
   setAuthToken(res.token);
   setAuthUser(res.user);
   return res;
+}
+
+export async function registerUser(payload: {
+  name: string;
+  email: string;
+  password: string;
+}): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(
+    "/auth/register",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    false
+  );
 }
 
 export async function fetchMe(): Promise<User> {

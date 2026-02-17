@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import MainLayout from "./MainLayout";
+import Loader from "./Loader";
 import { useAuth } from "@/components/AuthProvider";
 
 type RoleGuardProps = {
@@ -44,8 +45,8 @@ export default function RoleGuard({
     return (
       <MainLayout>
         <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="text-center">
-            <div className="mb-4 text-4xl animate-spin">⏳</div>
+          <div className="flex flex-col items-center gap-4">
+            <Loader size="lg" />
             <p className="text-lg text-gray-600">Checking access...</p>
           </div>
         </div>

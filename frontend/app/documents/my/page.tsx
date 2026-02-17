@@ -7,16 +7,26 @@ import { clearAuthToken } from "@/lib/api";
 import MainLayout from "@/components/MainLayout";
 import RoleGuard from "@/components/RoleGuard";
 import { useAuth } from "@/components/AuthProvider";
+import StatusCell from "@/components/StatusCell";
+import Loader from "@/components/Loader";
+import { formatDisplayDate, formatTimeEncoded } from "@/lib/dateUtils";
 
 type Document = {
   id: number;
   document_code: string;
+  document_number?: string | null;
   date: string;
+  date_out?: string | null;
   type_of_document: string;
   pay_claimant: string;
+  particular: string;
   amount: string;
   status: string;
+  remarks?: string | null;
   department?: { name: string };
+  encoded_by_id?: number;
+  encoded_by?: { name?: string } | null;
+  created_at?: string;
 };
 
 const API_BASE =
@@ -43,9 +53,12 @@ export default function MyDocumentsPage() {
         }
 
         // Fetch documents encoded by current user
-        const res = await fetch(`${API_BASE}/documents?encoded_by=${auth.user.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then((r) => r.json());
+        const res = await fetch(
+          `${API_BASE}/documents?encoded_by=${auth.user.id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        ).then((r) => r.json());
         setDocuments(res.data ?? []);
       } catch (err: any) {
         clearAuthToken();
@@ -62,8 +75,8 @@ export default function MyDocumentsPage() {
       <RoleGuard allowedRoles={["Encoder"]}>
         <MainLayout>
           <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-4xl">⏳</div>
+            <div className="flex flex-col items-center gap-4">
+              <Loader size="lg" />
               <p className="text-lg text-gray-600">Loading your documents...</p>
             </div>
           </div>
@@ -78,7 +91,9 @@ export default function MyDocumentsPage() {
         {/* Page Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Encoded Documents</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              My Encoded Documents
+            </h1>
             <p className="mt-2 text-lg text-gray-600">
               Documents you have created and encoded
             </p>
@@ -109,37 +124,52 @@ export default function MyDocumentsPage() {
                         Document Code
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                        Date
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                         Type
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                        Pay Claimant
+                        Payee / Claimant
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        Document No.
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        Particular
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                         Amount
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                        Status
+                        Encoded By
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                        Actions
+                        Date Received
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        Date Released
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        Remarks
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        Dept. Out
+                      </th>
+                      <th className="w-[200px] px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        Status
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {documents.map((doc) => (
-                      <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
+                      <tr
+                        key={doc.id}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-base font-mono font-medium text-gray-900">
                             {doc.document_code}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-base text-gray-700">{doc.date}</span>
-                        </td>
-                        <td className="px-6 py-4">
                           <span className="text-base text-gray-700">
                             {doc.type_of_document}
                           </span>
@@ -147,6 +177,16 @@ export default function MyDocumentsPage() {
                         <td className="px-6 py-4">
                           <span className="text-base text-gray-700">
                             {doc.pay_claimant}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-base text-gray-700">
+                            {doc.document_number || doc.document_code}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 max-w-xs">
+                          <span className="line-clamp-2 text-sm text-gray-700">
+                            {doc.particular}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -158,17 +198,50 @@ export default function MyDocumentsPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800">
-                            {doc.status}
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-900">
+                              {doc.encoded_by?.name ??
+                                (doc.encoded_by_id
+                                  ? `User #${doc.encoded_by_id}`
+                                  : auth.user?.name ?? "—")}
+                            </span>
+                            <span className="mt-0.5 text-xs text-gray-500 font-normal">
+                              {formatTimeEncoded(doc.created_at)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-700">
+                            {formatDisplayDate(doc.date)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <Link
-                            href={`/documents/${doc.id}/edit`}
-                            className="text-base font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            Edit
-                          </Link>
+                          <span className="text-sm text-gray-700">
+                            {formatDisplayDate(doc.date_out ?? null)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 max-w-xs">
+                          <span className="line-clamp-2 text-sm text-gray-700">
+                            {doc.remarks || "—"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-700">
+                            {formatDisplayDate(doc.date_out ?? null)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusCell
+                            status={doc.status}
+                            action={
+                              <Link
+                                href={`/documents/${doc.id}/edit`}
+                                className="text-sm font-medium text-[#7b2c3d] hover:text-[#6b2433] hover:underline"
+                              >
+                                Edit
+                              </Link>
+                            }
+                          />
                         </td>
                       </tr>
                     ))}

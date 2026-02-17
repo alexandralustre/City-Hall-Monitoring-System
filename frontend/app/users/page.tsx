@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { clearAuthToken } from "@/lib/api";
 import MainLayout from "@/components/MainLayout";
 import RoleGuard from "@/components/RoleGuard";
+import Loader from "@/components/Loader";
 
 type User = {
   id: number;
@@ -23,6 +24,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [pendingRole, setPendingRole] = useState<Record<number, "Admin" | "Encoder">>({});
 
   const token =
     typeof window !== "undefined"
@@ -109,13 +111,68 @@ export default function UsersPage() {
     }
   }
 
+  async function approveUser(user: User) {
+    try {
+      setSavingId(user.id);
+      setError(null);
+      const role = pendingRole[user.id] ?? "Encoder";
+      const res = await fetch(`${API_BASE}/users/${user.id}/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to approve user");
+      }
+      const updated = await res.json();
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, ...updated } : u))
+      );
+    } catch (err: any) {
+      setError(err.message || "Failed to approve user");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function rejectUser(user: User) {
+    if (!confirm(`Reject registration for ${user.name}?`)) return;
+    try {
+      setSavingId(user.id);
+      setError(null);
+      const res = await fetch(`${API_BASE}/users/${user.id}/reject`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to reject user");
+      }
+      const updated = await res.json();
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, ...updated } : u))
+      );
+    } catch (err: any) {
+      setError(err.message || "Failed to reject user");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <RoleGuard allowedRoles={["Admin"]}>
         <MainLayout>
           <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-4xl">⏳</div>
+            <div className="flex flex-col items-center gap-4">
+              <Loader size="lg" />
               <p className="text-lg text-gray-600">Loading users...</p>
             </div>
           </div>
@@ -196,10 +253,48 @@ export default function UsersPage() {
                               : "bg-gray-200 text-gray-700"
                           }`}
                         >
-                          {user.is_active ?? true ? "Active" : "Inactive"}
+                          {user.is_active ?? true
+                            ? "Active"
+                            : user.role === "Viewer"
+                              ? "Pending"
+                              : "Inactive"}
                         </span>
                       </td>
                       <td className="px-6 py-4 space-x-3">
+                        {/* Pending self-registrations (role Viewer + inactive) */}
+                        {!(user.is_active ?? true) && user.role === "Viewer" ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              value={pendingRole[user.id] ?? "Encoder"}
+                              onChange={(e) =>
+                                setPendingRole((prev) => ({
+                                  ...prev,
+                                  [user.id]: e.target.value as "Admin" | "Encoder",
+                                }))
+                              }
+                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                            >
+                              <option value="Encoder">Approve as Encoder</option>
+                              <option value="Admin">Approve as Admin</option>
+                            </select>
+                            <button
+                              type="button"
+                              disabled={savingId === user.id}
+                              onClick={() => approveUser(user)}
+                              className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={savingId === user.id}
+                              onClick={() => rejectUser(user)}
+                              className="rounded-lg bg-gray-200 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300 disabled:opacity-60"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
                         <button
                           type="button"
                           disabled={savingId === user.id}
@@ -208,6 +303,7 @@ export default function UsersPage() {
                         >
                           {user.is_active ?? true ? "Deactivate" : "Activate"}
                         </button>
+                        )}
                         <button
                           type="button"
                           disabled={savingId === user.id}

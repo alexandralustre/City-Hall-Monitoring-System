@@ -7,6 +7,9 @@ import MainLayout from "@/components/MainLayout";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { cachedJson } from "@/lib/cache";
+import StatusBadge from "@/components/StatusBadge";
+import StatusCell from "@/components/StatusCell";
+import Loader from "@/components/Loader";
 
 type Metrics = {
   total_documents: number;
@@ -135,8 +138,8 @@ export default function DashboardPage() {
     return (
       <MainLayout>
         <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="text-center">
-            <div className="mb-4 text-4xl animate-spin">⏳</div>
+          <div className="flex flex-col items-center gap-4">
+            <Loader size="lg" />
             <p className="text-lg text-gray-600">Loading dashboard...</p>
           </div>
         </div>
@@ -260,7 +263,7 @@ export default function DashboardPage() {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                     Department
                   </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                  <th className="w-[180px] px-6 py-4 text-left text-sm font-semibold text-gray-700">
                     Status
                   </th>
                 </tr>
@@ -287,10 +290,8 @@ export default function DashboardPage() {
                           {doc.department?.name ?? "N/A"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800">
-                          {doc.status}
-                        </span>
+                      <td className="px-6 py-4">
+                        <StatusCell status={doc.status} />
                       </td>
                     </tr>
                   ))
@@ -359,7 +360,7 @@ export default function DashboardPage() {
               <h3 className="text-xl font-semibold text-gray-900">
                 Pending
               </h3>
-              <span className="text-3xl">⏳</span>
+              <span className="text-3xl">📋</span>
             </div>
             <p className="text-gray-600">
               Documents waiting for action
@@ -394,11 +395,8 @@ export default function DashboardPage() {
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
                       Pay Claimant
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    <th className="w-[200px] px-6 py-4 text-left text-sm font-semibold text-gray-700">
                       Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -418,18 +416,18 @@ export default function DashboardPage() {
                           {doc.pay_claimant}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800">
-                          {doc.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Link
-                          href={`/documents/${doc.id}/edit`}
-                          className="text-base font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          Edit
-                        </Link>
+                      <td className="px-6 py-4">
+                        <StatusCell
+                          status={doc.status}
+                          action={
+                            <Link
+                              href={`/documents/${doc.id}/edit`}
+                              className="text-sm font-medium text-[#7b2c3d] hover:text-[#6b2433] hover:underline"
+                            >
+                              Edit
+                            </Link>
+                          }
+                        />
                       </td>
                     </tr>
                   ))}

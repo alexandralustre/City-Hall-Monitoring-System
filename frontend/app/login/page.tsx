@@ -1,9 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
+import Loader from "@/components/Loader";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +14,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoutToast, setLogoutToast] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("logged_out") === "1") {
+      setLogoutToast(true);
+      router.replace("/login");
+      const t = setTimeout(() => setLogoutToast(false), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [router]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -19,34 +33,45 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      // Ensure AuthProvider has the latest user state
       await auth.refresh();
       router.replace("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Login failed. Please check your credentials.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Login failed. Please check your credentials.";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 px-4">
-      <div className="w-full max-w-md">
-        {/* Logo/Header */}
-        <div className="mb-8 text-center">
-          <div className="mb-4 text-6xl">🏛️</div>
-          <h1 className="mb-2 text-3xl font-bold text-gray-900">
-            City Hall Monitoring System
-          </h1>
-          <p className="text-lg text-gray-600">
-            Sign in to access your account
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-12">
+      {/* Logout success toast */}
+      {logoutToast && (
+        <div
+          className="fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-green-200 bg-green-50 px-6 py-3 shadow-lg animate-modal-overlay"
+          role="status"
+        >
+          <p className="text-sm font-medium text-green-800">
+            Successfully logged out.
           </p>
         </div>
-
+      )}
+      <div className="w-full max-w-md">
         {/* Login Card */}
-        <div className="rounded-2xl bg-white p-8 shadow-xl border border-gray-200">
+        <div className="rounded-2xl bg-white p-8 shadow-lg border border-gray-200">
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="mb-4 text-5xl">🏛️</div>
+            <h1 className="mb-2 text-2xl font-bold text-gray-900">
+              City Hall Monitoring System
+            </h1>
+            <p className="text-base text-gray-500">
+              Secure Access Portal
+            </p>
+          </div>
+
           {error && (
-            <div className="mb-6 rounded-lg border-2 border-red-200 bg-red-50 p-4">
+            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">⚠️</span>
                 <div>
@@ -57,85 +82,93 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
                 htmlFor="email"
-                className="mb-2 block text-base font-semibold text-gray-700"
+                className="mb-2 block text-sm font-semibold text-gray-700"
               >
                 Email Address
               </label>
               <input
                 id="email"
                 type="email"
-                className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all"
-                placeholder="your.email@cityhall.local"
+                className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base text-gray-900 placeholder-gray-400 focus:border-[#7b2c3d] focus:outline-none focus:ring-2 focus:ring-[#7b2c3d]/20 transition-all"
+                placeholder="Enter your City Hall email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
               />
-              <p className="mt-1 text-sm text-gray-500">
-                Enter your City Hall email address
-              </p>
             </div>
 
             <div>
               <label
                 htmlFor="password"
-                className="mb-2 block text-base font-semibold text-gray-700"
+                className="mb-2 block text-sm font-semibold text-gray-700"
               >
                 Password
               </label>
               <input
                 id="password"
                 type="password"
-                className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all"
+                className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base text-gray-900 placeholder-gray-400 focus:border-[#7b2c3d] focus:outline-none focus:ring-2 focus:ring-[#7b2c3d]/20 transition-all"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
               />
-              <p className="mt-1 text-sm text-gray-500">
-                Enter your account password
-              </p>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-4 text-base font-semibold text-white shadow-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#7b2c3d] to-[#9b3d4d] px-6 py-4 text-base font-semibold text-white shadow-md hover:from-[#6b2433] hover:to-[#8b3545] disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-300 ease-in-out active:scale-[0.98]"
             >
               {loading ? (
                 <>
-                  <span className="animate-spin">⏳</span>
-                  <span>Signing in...</span>
+                  <Loader size="md" variant="light" />
+                  <span>Signing In...</span>
                 </>
               ) : (
                 <>
-                  <span>🔐</span>
+                  <span>🔒</span>
                   <span>Sign In</span>
                 </>
               )}
             </button>
           </form>
 
-          {/* Help Text */}
-          <div className="mt-6 rounded-lg bg-blue-50 p-4 border border-blue-100">
-            <p className="text-sm text-blue-800">
-              <strong>Need help?</strong> Contact your system administrator if
-              you forgot your password or need account access.
+          {/* Create New Account Section */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <p className="text-center text-sm text-gray-600 mb-3">
+              Don&apos;t have an account?
+            </p>
+            <Link
+              href="/register"
+              className="flex w-full items-center justify-center rounded-xl border-2 border-[#7b2c3d] bg-white px-6 py-3 text-base font-semibold text-[#7b2c3d] shadow-sm transition-all duration-300 ease-in-out hover:border-transparent hover:bg-gradient-to-r hover:from-[#7b2c3d] hover:to-[#9b3d4d] hover:text-white hover:shadow-md active:scale-[0.98]"
+            >
+              Create New Account
+            </Link>
+            <p className="mt-3 text-center text-xs text-gray-500">
+              New account requests require admin approval.
+            </p>
+          </div>
+
+          {/* Footer Help Section */}
+          <div className="mt-6 rounded-xl bg-gray-50 p-4 border border-gray-100">
+            <p className="text-sm text-gray-600">
+              <strong className="text-gray-700">Need help?</strong> Contact your system administrator if you forgot your password or need account access.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-sm text-gray-600">
-          © {new Date().getFullYear()} City Hall Monitoring System
+        <p className="mt-6 text-center text-sm text-gray-500">
+          © City Hall Monitoring System
         </p>
       </div>
     </div>
   );
 }
-

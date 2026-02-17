@@ -95,7 +95,7 @@ export default function HelpPage() {
             </h2>
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <span className="text-xl">⏳</span>
+                <span className="text-xl">📋</span>
                 <div>
                   <strong className="text-base text-gray-900">Pending</strong>
                   <p className="text-base text-gray-600">

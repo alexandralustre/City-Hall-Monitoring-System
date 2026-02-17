@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditTrail;
 use App\Models\Department;
 use App\Models\Document;
+use App\Models\EditRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -50,12 +51,6 @@ class DocumentController extends Controller
         // Filter by encoder (for \"My Documents\" views in the frontend)
         if ($encodedBy = $request->get('encoded_by')) {
             $query->where('encoded_by_id', $encodedBy);
-        }
-
-        // Encoders can only see their own documents
-        $currentUser = $request->user();
-        if ($currentUser && $currentUser->role === 'Encoder') {
-            $query->where('encoded_by_id', $currentUser->id);
         }
 
         if ($from = $request->get('date_from')) {
@@ -116,21 +111,130 @@ class DocumentController extends Controller
 
     public function show(Request $request, Document $document)
     {
-        $user = $request->user();
-
-        // Encoders may only view their own documents
-        if ($user && $user->role === 'Encoder' && $document->encoded_by_id !== $user->id) {
-            abort(403, 'You are not authorized to view this document.');
-        }
-
+        // All authenticated users can view any document details.
         $document->load(['department', 'encodedBy']);
 
         return response()->json($document);
     }
 
+    /**
+     * Document history (audit trail) for admin only. Read-only, ordered oldest to newest.
+     * Each entry includes action type, previous/new status, user name & role, department, remarks, timestamp.
+     */
+    public function history(Request $request, Document $document)
+    {
+        $user = $request->user();
+        if (! $user || $user->role !== 'Admin') {
+            abort(403, 'Only administrators can view document history.');
+        }
+
+        $trails = AuditTrail::where('document_id', $document->id)
+            ->with('user:id,name,role')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $entries = $trails->map(function (AuditTrail $trail) {
+            $payload = $trail->payload ?? [];
+            $before = $payload['before'] ?? null;
+            $after = $payload['after'] ?? $payload;
+            $snapshot = is_array($after) ? $after : (is_array($before) ? $before : []);
+
+            $actionType = $this->resolveHistoryActionType($trail->action, $before, $after);
+            $previousStatus = $this->getStatusFromPayload($before);
+            $newStatus = $this->getStatusFromPayload($after);
+            $departmentName = $this->getDepartmentNameFromPayload($snapshot);
+            $remarks = $this->getRemarksFromPayload($snapshot);
+
+            return [
+                'id' => $trail->id,
+                'action_type' => $actionType,
+                'previous_status' => $previousStatus,
+                'new_status' => $newStatus,
+                'user_name' => $trail->user ? $trail->user->name : null,
+                'user_role' => $trail->user ? $trail->user->role : null,
+                'department' => $departmentName,
+                'remarks' => $remarks,
+                'created_at' => $trail->created_at->toIso8601String(),
+            ];
+        });
+
+        return response()->json(['data' => $entries]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $before
+     * @param  array<string, mixed>|mixed  $after
+     */
+    private function resolveHistoryActionType(string $action, ?array $before, $after): string
+    {
+        return match ($action) {
+            'document_created' => 'Created',
+            'document_deleted' => 'Deleted',
+            'edit_request_created' => 'Edit Request',
+            'edit_request_approved' => 'Edit Request Approved',
+            'edit_request_rejected' => 'Edit Request Rejected',
+            'edit_request_used' => 'Edit Session Completed',
+            default => $this->resolveUpdateActionType($action, $before, $after),
+        };
+    }
+
+    private function resolveUpdateActionType(string $action, ?array $before, $after): string
+    {
+        if ($action === 'document_updated' && is_array($before) && is_array($after)) {
+            $prevStatus = $before['status'] ?? null;
+            $nextStatus = $after['status'] ?? null;
+            if ($prevStatus !== null && $nextStatus !== null && $prevStatus !== $nextStatus) {
+                if ($nextStatus === 'Returned') {
+                    return 'Returned';
+                }
+                if ($nextStatus === 'Released') {
+                    return 'Released';
+                }
+                if ($nextStatus === 'Completed') {
+                    return 'Completed';
+                }
+                return 'Status Changed';
+            }
+        }
+        return 'Updated';
+    }
+
+    private function getStatusFromPayload($payload): ?string
+    {
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        return $payload['status'] ?? null;
+    }
+
+    private function getDepartmentNameFromPayload(array $payload): ?string
+    {
+        $departmentId = $payload['department_id'] ?? null;
+        if ($departmentId === null) {
+            return null;
+        }
+        $department = Department::find($departmentId);
+
+        return $department ? $department->name : null;
+    }
+
+    private function getRemarksFromPayload(array $payload): ?string
+    {
+        $remarks = $payload['remarks'] ?? null;
+
+        return $remarks ? (string) $remarks : null;
+    }
+
     public function update(Request $request, Document $document)
     {
-        $this->authorizeRole($request, ['Admin', 'Encoder']);
+        $this->authorizeRole($request, ['Admin', 'Encoder', 'Viewer']);
+
+        $user = $request->user();
+
+        if (! $this->canEditDocument($user?->id, $document)) {
+            abort(403, 'You are not allowed to edit this document.');
+        }
 
         $validated = $this->validateDocument($request, $document->id);
 
@@ -141,7 +245,7 @@ class DocumentController extends Controller
         $document->update($validated);
 
         AuditTrail::create([
-            'user_id' => $request->user()->id,
+            'user_id' => $user?->id,
             'document_id' => $document->id,
             'action' => 'document_updated',
             'payload' => [
@@ -150,7 +254,56 @@ class DocumentController extends Controller
             ],
         ]);
 
+        // If this edit used a temporary permission, mark the request as used.
+        if ($user && (int) $document->encoded_by_id !== (int) $user->id) {
+            $now = now();
+            EditRequest::where('document_id', $document->id)
+                ->where('requested_by_user_id', $user->id)
+                ->where('status', 'accepted')
+                ->where(function ($q) use ($now) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', $now);
+                })
+                ->update(['status' => 'used']);
+
+            AuditTrail::create([
+                'user_id' => $user->id,
+                'document_id' => $document->id,
+                'action' => 'edit_request_used',
+                'payload' => [
+                    'edited_by_user_id' => $user->id,
+                ],
+            ]);
+        }
+
         return response()->json($document);
+    }
+
+    /**
+     * Determine whether the given user can edit the document directly.
+     * Only the original encoder, or a user with an accepted, non-expired
+     * edit request is allowed to edit.
+     */
+    protected function canEditDocument(?int $userId, Document $document): bool
+    {
+        if (! $userId) {
+            return false;
+        }
+
+        // Original encoder can always edit
+        if ((int) $document->encoded_by_id === $userId) {
+            return true;
+        }
+
+        // Check for accepted, non-expired edit request
+        $now = now();
+
+        return EditRequest::where('document_id', $document->id)
+            ->where('requested_by_user_id', $userId)
+            ->where('status', 'accepted')
+            ->where(function ($q) use ($now) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', $now);
+            })
+            ->exists();
     }
 
     public function destroy(Request $request, Document $document)
@@ -398,14 +551,21 @@ class DocumentController extends Controller
     {
         $year = now()->year;
 
-        // Count existing documents for this year + department to get next sequence.
-        $sequence = Document::whereYear('date', $year)
-            ->where('department_id', $department->id)
+        // Use the document code prefix (CH-YYYY-DEPT-) as the reliable source
+        // for sequencing, rather than the date column. This avoids issues where
+        // the stored document date might not match the current year but the
+        // document code still uses the current year.
+        $prefix = sprintf('CH-%d-%s-', $year, $department->code);
+
+        // Find how many existing codes already use this prefix, including
+        // soft-deleted rows, then increment to get the next sequence number.
+        $sequence = Document::withTrashed()
+            ->where('document_code', 'like', $prefix . '%')
             ->count() + 1;
 
         $sequencePadded = str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
 
-        return sprintf('CH-%d-%s-%s', $year, $department->code, $sequencePadded);
+        return $prefix . $sequencePadded;
     }
 
     protected function authorizeRole(Request $request, array $roles): void

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { clearAuthToken } from "@/lib/api";
 import MainLayout from "@/components/MainLayout";
 import RoleGuard from "@/components/RoleGuard";
+import Loader from "@/components/Loader";
 import { useAuth } from "@/components/AuthProvider";
 
 type Document = {
@@ -62,8 +63,8 @@ export default function PendingDocumentsPage() {
       <RoleGuard allowedRoles={["Encoder"]}>
         <MainLayout>
           <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-4xl">⏳</div>
+            <div className="flex flex-col items-center gap-4">
+              <Loader size="lg" />
               <p className="text-lg text-gray-600">Loading pending documents...</p>
             </div>
           </div>

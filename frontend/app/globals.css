@@ -37,3 +37,19 @@ h1, h2, h3, h4, h5, h6 {
 html {
   scroll-behavior: smooth;
 }
+
+/* Logout modal fade-in */
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-zoom-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-modal-overlay {
+  animation: modal-fade-in 0.2s ease-out;
+}
+.animate-modal-content {
+  animation: modal-zoom-in 0.25s ease-out;
+}

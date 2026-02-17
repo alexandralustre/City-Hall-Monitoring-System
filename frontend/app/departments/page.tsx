@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { clearAuthToken } from "@/lib/api";
 import MainLayout from "@/components/MainLayout";
 import RoleGuard from "@/components/RoleGuard";
+import Loader from "@/components/Loader";
 import { cachedJson } from "@/lib/cache";
 
 type Department = {
@@ -100,8 +101,8 @@ export default function DepartmentsPage() {
       <RoleGuard allowedRoles={["Admin"]}>
         <MainLayout>
           <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-4xl">⏳</div>
+            <div className="flex flex-col items-center gap-4">
+              <Loader size="lg" />
               <p className="text-lg text-gray-600">Loading departments...</p>
             </div>
           </div>
@@ -189,11 +190,11 @@ export default function DepartmentsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7b2c3d] to-[#9b3d4d] px-6 py-3 text-base font-semibold text-white shadow-md hover:from-[#6b2433] hover:to-[#8b3545] disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-300 ease-in-out active:scale-[0.98]"
             >
               {saving ? (
                 <>
-                  <span className="animate-spin">⏳</span>
+                  <Loader size="sm" variant="light" />
                   <span>Saving...</span>
                 </>
               ) : (

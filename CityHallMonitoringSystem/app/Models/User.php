@@ -23,6 +23,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role', // Admin, Encoder, Viewer
+        'is_active',
+        'account_status', // Pending, Approved, Rejected, Deactivated
     ];
 
     /**

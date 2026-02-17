@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Loader from "@/components/Loader";
 
 type Department = { id: number; name: string; code: string };
 
@@ -50,7 +51,7 @@ export default function DocumentForm({
   const [departmentId, setDepartmentId] = useState<number>(
     initial?.department_id ?? (departments[0]?.id ?? 0)
   );
-  const [status, setStatus] = useState(initial?.status ?? "Pending");
+  const [status, setStatus] = useState(initial?.status ?? "For Signature");
   const [remarks, setRemarks] = useState(initial?.remarks ?? "");
   const [dateOut, setDateOut] = useState(initial?.date_out ?? "");
 
@@ -262,10 +263,14 @@ export default function DocumentForm({
               className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all"
               required
             >
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Released">Released</option>
-              <option value="Completed">Completed</option>
+              <option value="For Signature">For Signature</option>
+              <option value="For Review">For Review</option>
+              <option value="For Initial">For Initial</option>
+              <option value="For Schedule">For Schedule</option>
+              <option value="Signed">Signed</option>
+              <option value="Filed">Filed</option>
+              <option value="Returned">Returned</option>
+              <option value="Hold">Hold</option>
             </select>
             <p className="mt-1 text-sm text-gray-500">
               Current status of this document
@@ -335,11 +340,11 @@ export default function DocumentForm({
         <button
           type="submit"
           disabled={loading || !departmentId}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-8 py-3 text-base font-semibold text-white shadow-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7b2c3d] to-[#9b3d4d] px-8 py-3 text-base font-semibold text-white shadow-md hover:from-[#6b2433] hover:to-[#8b3545] disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-300 ease-in-out active:scale-[0.98]"
         >
           {loading ? (
             <>
-              <span className="animate-spin">⏳</span>
+              <Loader size="sm" variant="light" />
               <span>Saving...</span>
             </>
           ) : (

@@ -57,6 +57,20 @@ export const encoderMenuItems: MenuItem[] = [
     roles: ["Encoder"],
   },
   {
+    name: "All Documents",
+    href: "/documents",
+    icon: "📄",
+    description: "View all documents in the system",
+    roles: ["Encoder"],
+  },
+  {
+    name: "Edit Requests",
+    href: "/edit-requests",
+    icon: "✏️",
+    description: "Manage edit requests for your documents",
+    roles: ["Encoder"],
+  },
+  {
     name: "Encode Document",
     href: "/documents/new",
     icon: "➕",
@@ -73,7 +87,7 @@ export const encoderMenuItems: MenuItem[] = [
   {
     name: "Pending Records",
     href: "/documents/pending",
-    icon: "⏳",
+    icon: "📋",
     description: "View pending documents",
     roles: ["Encoder"],
   },

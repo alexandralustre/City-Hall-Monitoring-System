@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditTrail;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class UserController extends Controller
 {
@@ -62,11 +63,20 @@ class UserController extends Controller
             'password' => bcrypt($password),
         ]);
 
+        if (Schema::hasColumn('users', 'account_status')) {
+            $user->account_status = ($validated['is_active'] ?? true) ? 'Approved' : 'Deactivated';
+            $user->save();
+        }
+
         try {
             AuditTrail::create([
                 'user_id' => $request->user()->id,
                 'action' => 'user_created',
-                'payload' => $user->toArray(),
+                'payload' => [
+                    'performed_by' => $request->user()->name,
+                    'target_user_id' => $user->id,
+                    'after' => $user->toArray(),
+                ],
             ]);
         } catch (\Exception $e) {
             \Log::warning('Audit trail (user_created) failed: ' . $e->getMessage());
@@ -90,7 +100,21 @@ class UserController extends Controller
         ]);
 
         $before = $user->toArray();
-        $user->update($validated);
+        $update = $validated;
+        if (array_key_exists('is_active', $validated)) {
+            if ($validated['is_active']) {
+                // Reactivation should return to Approved unless it was explicitly Rejected
+                if (Schema::hasColumn('users', 'account_status') && ($user->account_status ?? null) !== 'Rejected') {
+                    $update['account_status'] = 'Approved';
+                }
+            } else {
+                // Deactivation
+                if (Schema::hasColumn('users', 'account_status')) {
+                    $update['account_status'] = 'Deactivated';
+                }
+            }
+        }
+        $user->update($update);
 
         // Record audit trail, but don't break if logging fails
         try {
@@ -98,6 +122,8 @@ class UserController extends Controller
                 'user_id' => $request->user()->id,
                 'action' => 'user_updated',
                 'payload' => [
+                    'performed_by' => $request->user()->name,
+                    'target_user_id' => $user->id,
                     'before' => $before,
                     'after' => $user->toArray(),
                 ],
@@ -138,6 +164,85 @@ class UserController extends Controller
             'message' => 'Password has been reset.',
             'default_password' => $defaultPassword,
         ]);
+    }
+
+    /**
+     * Approve a pending self-registered user.
+     * Admin assigns role (Admin or Encoder) and activates the account.
+     */
+    public function approve(Request $request, User $user)
+    {
+        $this->authorizeRole($request, ['Admin']);
+
+        $validated = $request->validate([
+            'role' => ['required', 'in:Admin,Encoder'],
+        ]);
+
+        $before = $user->toArray();
+
+        $user->update([
+            'role' => $validated['role'],
+            'is_active' => true,
+        ]);
+        if (Schema::hasColumn('users', 'account_status')) {
+            $user->account_status = 'Approved';
+            $user->save();
+        }
+
+        try {
+            AuditTrail::create([
+                'user_id' => $request->user()->id,
+                'action' => 'user_approved',
+                'payload' => [
+                    'performed_by' => $request->user()->name,
+                    'target_user_id' => $user->id,
+                    'before' => $before,
+                    'after' => $user->toArray(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Audit trail (user_approved) failed: ' . $e->getMessage());
+        }
+
+        return response()->json($user);
+    }
+
+    /**
+     * Reject a pending self-registered user.
+     * Account remains inactive and cannot login.
+     */
+    public function reject(Request $request, User $user)
+    {
+        $this->authorizeRole($request, ['Admin']);
+
+        $before = $user->toArray();
+
+        $user->update([
+            // Keep as Viewer ("User") and inactive
+            'role' => $user->role ?: 'Viewer',
+            'is_active' => false,
+        ]);
+        if (Schema::hasColumn('users', 'account_status')) {
+            $user->account_status = 'Rejected';
+            $user->save();
+        }
+
+        try {
+            AuditTrail::create([
+                'user_id' => $request->user()->id,
+                'action' => 'user_rejected',
+                'payload' => [
+                    'performed_by' => $request->user()->name,
+                    'target_user_id' => $user->id,
+                    'before' => $before,
+                    'after' => $user->toArray(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Audit trail (user_rejected) failed: ' . $e->getMessage());
+        }
+
+        return response()->json($user);
     }
 
     /**

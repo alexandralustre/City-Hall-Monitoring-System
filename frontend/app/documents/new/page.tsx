@@ -6,6 +6,7 @@ import DocumentForm, { DocumentPayload } from "@/components/DocumentForm";
 import { clearAuthToken } from "@/lib/api";
 import MainLayout from "@/components/MainLayout";
 import RoleGuard from "@/components/RoleGuard";
+import Loader from "@/components/Loader";
 import { cachedJson } from "@/lib/cache";
 
 type Department = { id: number; name: string; code: string };
@@ -71,8 +72,8 @@ export default function NewDocumentPage() {
       <RoleGuard allowedRoles={["Admin", "Encoder"]}>
         <MainLayout>
           <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="text-center">
-              <div className="mb-4 text-4xl">⏳</div>
+            <div className="flex flex-col items-center gap-4">
+              <Loader size="lg" />
               <p className="text-lg text-gray-600">Loading form...</p>
             </div>
           </div>
